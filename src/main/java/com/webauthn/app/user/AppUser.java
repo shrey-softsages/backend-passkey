@@ -6,6 +6,7 @@ import javax.persistence.GeneratedValue;
 import javax.persistence.GenerationType;
 import javax.persistence.Id;
 import javax.persistence.Lob;
+import javax.transaction.Transactional;
 
 import com.yubico.webauthn.data.ByteArray;
 import com.yubico.webauthn.data.UserIdentity;
@@ -13,13 +14,15 @@ import com.yubico.webauthn.data.UserIdentity;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 
+import java.util.Base64;
+
 @Entity
 @Getter
 @NoArgsConstructor
 public class AppUser {
     @Id
     @GeneratedValue(strategy = GenerationType.AUTO)
-    private Long id;
+    private Integer id;
 
     @Column(nullable = false, unique = true)
     private String username;
@@ -27,21 +30,21 @@ public class AppUser {
     @Column(nullable = false)
     private String displayName;
 
-    @Lob
-    @Column(nullable = false, length = 64)
-    private ByteArray handle;
+    @Column(nullable = false)
+    private String handle;
 
     public AppUser(UserIdentity user) {
-        this.handle = user.getId();
+        this.handle = user.getId().getBase64();
         this.username = user.getName();
         this.displayName = user.getDisplayName();
     }
 
+    @Transactional
     public UserIdentity toUserIdentity() {
         return UserIdentity.builder()
             .name(getUsername())
             .displayName(getDisplayName())
-            .id(getHandle())
+            .id(new ByteArray(Base64.getDecoder().decode(getHandle())))
             .build();
     }
 }

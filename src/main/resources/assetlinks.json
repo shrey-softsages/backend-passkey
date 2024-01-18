@@ -1,0 +1,9 @@
+[{
+  "relation": ["delegate_permission/common.handle_all_urls",
+    "delegate_permission/common.get_login_creds"],
+  "target": {
+    "namespace": "android_app",
+    "package_name": "com.example.passkeys_impl",
+    "sha256_cert_fingerprints": ["1A:29:33:3E:16:90:8E:73:51:DE:2E:38:F3:1B:9E:B3:34:FB:66:D7:1C:77:38:45:A4:3D:B2:F0:23:4D:27:CE"]
+  }
+}]

@@ -22,7 +22,7 @@ import lombok.NoArgsConstructor;
 @Entity
 @Getter
 @NoArgsConstructor
-public class Authenticator {
+public class    Authenticator {
 
     @Id
     @GeneratedValue(strategy = GenerationType.AUTO)
@@ -31,29 +31,27 @@ public class Authenticator {
     @Column
     private String name;
 
-    @Lob
     @Column(nullable = false)
-    private ByteArray credentialId;
+    private String credentialId;
 
-    @Lob
     @Column(nullable = false)
-    private ByteArray publicKey;
+    private String publicKey;
 
 @Column(nullable = false)
 private Long count;
 
-@Lob
+
 @Column(nullable = true)
-private ByteArray aaguid;
+private String aaguid;
 
     @ManyToOne
     private AppUser user;
 
 public Authenticator(RegistrationResult result, AuthenticatorAttestationResponse response, AppUser user, String name) {
     Optional<AttestedCredentialData> attestationData = response.getAttestation().getAuthenticatorData().getAttestedCredentialData();
-    this.credentialId = result.getKeyId().getId();
-    this.publicKey = result.getPublicKeyCose();
-    this.aaguid = attestationData.get().getAaguid();
+    this.credentialId = result.getKeyId().getId().getBase64();
+    this.publicKey = result.getPublicKeyCose().getBase64();
+    this.aaguid = attestationData.get().getAaguid().getBase64();
     this.count = result.getSignatureCount();
     this.name = name;
     this.user = user;
