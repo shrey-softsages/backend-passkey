@@ -5,17 +5,19 @@ import javax.persistence.Converter;
 
 import com.yubico.webauthn.data.ByteArray;
 
-@Converter(autoApply = true)
-public class ByteArrayAttributeConverter implements AttributeConverter<ByteArray, byte[]> {
+import java.util.Base64;
+
+//@Converter(autoApply = true)
+public class ByteArrayAttributeConverter implements AttributeConverter<ByteArray, String> {
 
     @Override
-    public byte[] convertToDatabaseColumn(ByteArray attribute) {
-        return attribute.getBytes();
+    public String convertToDatabaseColumn(ByteArray attribute) {
+        return attribute.getBase64();
     }
 
     @Override
-    public ByteArray convertToEntityAttribute(byte[] dbData) {
-        return new ByteArray(dbData);
+    public ByteArray convertToEntityAttribute(String dbData) {
+        return new ByteArray(Base64.getDecoder().decode(dbData));
     }
 
 }

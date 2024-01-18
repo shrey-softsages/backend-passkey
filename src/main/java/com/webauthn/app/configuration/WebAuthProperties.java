@@ -13,9 +13,7 @@ import lombok.Setter;
 @Getter
 @Setter
 public class WebAuthProperties {
-
     private String hostName;
     private String display;
     private Set<String> origin;
-
 }

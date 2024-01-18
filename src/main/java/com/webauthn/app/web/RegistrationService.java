@@ -1,5 +1,6 @@
 package com.webauthn.app.web;
 
+import java.util.Base64;
 import java.util.List;
 import java.util.Optional;
 import java.util.Set;
@@ -14,6 +15,7 @@ import com.yubico.webauthn.RegisteredCredential;
 import com.yubico.webauthn.data.ByteArray;
 import com.yubico.webauthn.data.PublicKeyCredentialDescriptor;
 
+import lombok.AllArgsConstructor;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Repository;
 
@@ -21,6 +23,7 @@ import lombok.Getter;
 
 @Repository
 @Getter
+@AllArgsConstructor
 public class RegistrationService implements CredentialRepository  {
     @Autowired
     private UserRepository userRepo;
@@ -35,7 +38,7 @@ public class RegistrationService implements CredentialRepository  {
         .map(
             credential ->
                 PublicKeyCredentialDescriptor.builder()
-                    .id(credential.getCredentialId())
+                    .id(new ByteArray(Base64.getDecoder().decode(credential.getCredentialId())))
                     .build())
         .collect(Collectors.toSet());
     }
@@ -43,24 +46,26 @@ public class RegistrationService implements CredentialRepository  {
     @Override
     public Optional<ByteArray> getUserHandleForUsername(String username) {
         AppUser user = userRepo.findByUsername(username);
-        return Optional.of(user.getHandle());
+        return Optional.of(new ByteArray(Base64.getDecoder().decode(user.getHandle())));
     }
 
     @Override
     public Optional<String> getUsernameForUserHandle(ByteArray userHandle) {
-        AppUser user = userRepo.findByHandle(userHandle);
+        AppUser user = userRepo.findByHandle(userHandle.getBase64());
         return Optional.of(user.getUsername());
     }
 
     @Override
     public Optional<RegisteredCredential> lookup(ByteArray credentialId, ByteArray userHandle) {
-        Optional<Authenticator> auth = authRepository.findByCredentialId(credentialId);
+        Optional<Authenticator> auth = authRepository.findByCredentialId(credentialId.getBase64());
+        System.out.println(auth);
+        System.out.println(credentialId.getBase64()+"\n"+userHandle.getBase64());
         return auth.map(
             credential ->
                 RegisteredCredential.builder()
-                    .credentialId(credential.getCredentialId())
-                    .userHandle(credential.getUser().getHandle())
-                    .publicKeyCose(credential.getPublicKey())
+                    .credentialId(new ByteArray(Base64.getDecoder().decode(credential.getCredentialId())))
+                    .userHandle(new ByteArray(Base64.getDecoder().decode(credential.getUser().getHandle())))
+                    .publicKeyCose(new ByteArray(Base64.getDecoder().decode(credential.getPublicKey())))
                     .signatureCount(credential.getCount())
                     .build()
         );
@@ -68,16 +73,16 @@ public class RegistrationService implements CredentialRepository  {
 
     @Override
     public Set<RegisteredCredential> lookupAll(ByteArray credentialId) {
-        List<Authenticator> auth = authRepository.findAllByCredentialId(credentialId);
+        List<Authenticator> auth = authRepository.findAllByCredentialId(credentialId.getBase64());
         return auth.stream()
         .map(
             credential ->
                 RegisteredCredential.builder()
-                    .credentialId(credential.getCredentialId())
-                    .userHandle(credential.getUser().getHandle())
-                    .publicKeyCose(credential.getPublicKey())
-                    .signatureCount(credential.getCount())
-                    .build())
+                        .credentialId(new ByteArray(Base64.getDecoder().decode(credential.getCredentialId())))
+                        .userHandle(new ByteArray(Base64.getDecoder().decode(credential.getUser().getHandle())))
+                        .publicKeyCose(new ByteArray(Base64.getDecoder().decode(credential.getPublicKey())))
+                        .signatureCount(credential.getCount())
+                        .build())
         .collect(Collectors.toSet());
     }
 }

@@ -1,12 +1,14 @@
 package com.webauthn.app.web;
 
 import java.io.IOException;
+import java.util.Base64;
 
 import javax.servlet.http.HttpSession;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.webauthn.app.authenticator.Authenticator;
 import com.webauthn.app.user.AppUser;
+import com.webauthn.app.utility.ByteArrayAttributeConverter;
 import com.webauthn.app.utility.Utility;
 import com.yubico.webauthn.AssertionRequest;
 import com.yubico.webauthn.AssertionResult;
@@ -16,16 +18,11 @@ import com.yubico.webauthn.RegistrationResult;
 import com.yubico.webauthn.RelyingParty;
 import com.yubico.webauthn.StartAssertionOptions;
 import com.yubico.webauthn.StartRegistrationOptions;
-import com.yubico.webauthn.data.AuthenticatorAssertionResponse;
-import com.yubico.webauthn.data.AuthenticatorAttestationResponse;
-import com.yubico.webauthn.data.ClientAssertionExtensionOutputs;
-import com.yubico.webauthn.data.ClientRegistrationExtensionOutputs;
-import com.yubico.webauthn.data.PublicKeyCredential;
-import com.yubico.webauthn.data.PublicKeyCredentialCreationOptions;
-import com.yubico.webauthn.data.UserIdentity;
+import com.yubico.webauthn.data.*;
 import com.yubico.webauthn.exception.AssertionFailedException;
 import com.yubico.webauthn.exception.RegistrationFailedException;
 
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Controller;
 import org.springframework.ui.Model;
@@ -42,6 +39,7 @@ public class AuthController {
     private RelyingParty relyingParty;
     private RegistrationService service;
 
+    @Autowired
     AuthController(RegistrationService service, RelyingParty relyingPary) {
         this.relyingParty = relyingPary;
         this.service = service;
@@ -65,6 +63,7 @@ public class AuthController {
         HttpSession session
     ) {
         AppUser existingUser = service.getUserRepo().findByUsername(username);
+
         if (existingUser == null) {
             UserIdentity userIdentity = UserIdentity.builder()
                 .name(username)
@@ -83,12 +82,12 @@ public class AuthController {
     @PostMapping("/registerauth")
     @ResponseBody
     public String newAuthRegistration(
-        @RequestParam AppUser user,
+        @RequestParam AppUser existingUser,
         HttpSession session
     ) {
-        AppUser existingUser = service.getUserRepo().findByHandle(user.getHandle());
+        //AppUser existingUser = service.getUserRepo().findByHandle(user.getHandle());
         if (existingUser != null) {
-            UserIdentity userIdentity = user.toUserIdentity();
+            UserIdentity userIdentity = existingUser.toUserIdentity();
             StartRegistrationOptions registrationOptions = StartRegistrationOptions.builder()
             .user(userIdentity)
             .build();
@@ -100,7 +99,7 @@ public class AuthController {
                     throw new ResponseStatusException(HttpStatus.INTERNAL_SERVER_ERROR, "Error processing JSON.", e);
             }
         } else {
-            throw new ResponseStatusException(HttpStatus.CONFLICT, "User " + user.getUsername() + " does not exist. Please register.");
+            throw new ResponseStatusException(HttpStatus.CONFLICT, "User " + existingUser.getUsername() + " does not exist. Please register.");
         }
     }
 
@@ -115,13 +114,16 @@ public class AuthController {
             try {
                 AppUser user = service.getUserRepo().findByUsername(username);
                 PublicKeyCredentialCreationOptions requestOptions = (PublicKeyCredentialCreationOptions) session.getAttribute(user.getUsername());
+                System.out.println(requestOptions);
                 if (requestOptions != null) {
                     PublicKeyCredential<AuthenticatorAttestationResponse, ClientRegistrationExtensionOutputs> pkc =
                     PublicKeyCredential.parseRegistrationResponseJson(credential);
+                    System.out.println("New Authenticator");
                     FinishRegistrationOptions options = FinishRegistrationOptions.builder()
                         .request(requestOptions)
                         .response(pkc)
                         .build();
+                    System.out.println(pkc);
                     RegistrationResult result = relyingParty.finishRegistration(options);
                     Authenticator savedAuth = new Authenticator(result, pkc.getResponse(), user, credname);
                     service.getAuthRepository().save(savedAuth);
@@ -130,8 +132,10 @@ public class AuthController {
                     throw new ResponseStatusException(HttpStatus.INTERNAL_SERVER_ERROR, "Cached request expired. Try to register again!");
                 }
             } catch (RegistrationFailedException e) {
+                System.out.println(e);  
                 throw new ResponseStatusException(HttpStatus.BAD_GATEWAY, "Registration failed.", e);
             } catch (IOException e) {
+                System.out.println(e);
                 throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Failed to save credenital, please try again!", e);
             }
     }
@@ -147,14 +151,23 @@ public class AuthController {
         @RequestParam String username,
         HttpSession session
     ) {
-        AssertionRequest request = relyingParty.startAssertion(StartAssertionOptions.builder()
-            .username(username)
-            .build());
-        try {
-            session.setAttribute(username, request);
-            return request.toCredentialsGetJson();
-        } catch (JsonProcessingException e) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, e.getMessage());
+        if(service.getUserRepo().findByUsername(username).getUsername()!=null) {
+            AssertionRequest request = relyingParty.startAssertion(StartAssertionOptions.builder()
+                    .username(username)
+                    .build());
+
+            try {
+                session.setAttribute(username, request);
+                System.out.println(session.getAttribute(username));
+                System.out.println(request.toCredentialsGetJson());
+                return request.toCredentialsGetJson();
+            } catch (JsonProcessingException e) {
+                throw new ResponseStatusException(HttpStatus.BAD_REQUEST, e.getMessage());
+            }
+        }
+        else
+        {
+            throw new ResponseStatusException(HttpStatus.CONFLICT);
         }
     }
 
@@ -166,24 +179,32 @@ public class AuthController {
         HttpSession session
     ) {
         try {
+            System.out.print(credential+"\n"+username+"\n");
             PublicKeyCredential<AuthenticatorAssertionResponse, ClientAssertionExtensionOutputs> pkc;
             pkc = PublicKeyCredential.parseAssertionResponseJson(credential);
             AssertionRequest request = (AssertionRequest)session.getAttribute(username);
+            System.out.println(pkc);
             AssertionResult result = relyingParty.finishAssertion(FinishAssertionOptions.builder()
                 .request(request)
                 .response(pkc)
                 .build());
             if (result.isSuccess()) {
+                System.out.print("Success");
                 model.addAttribute("username", username);
                 return "welcome";
             } else {
+                System.out.print("Failed");
                 return "index";
             }
         } catch (IOException e) {
             throw new RuntimeException("Authentication failed", e);
         } catch (AssertionFailedException e) {
+            System.out.println("Assertion Failed");
             throw new RuntimeException("Authentication failed", e);
         }
 
     }
+
+
+
 }
